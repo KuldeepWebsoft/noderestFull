@@ -21,13 +21,29 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
+app.use((req,res,next)=>{
+  res.setHeader("Access-Control-Allow-Origin","*");
+  res.setHeader("Access-Control-Allow-Headers","Origin,X-Requested-With,Content-Type,Accept,table,database");
+  res.setHeader("Access-Control-Allow-Methods","GET,POST,PATCH,DELETE,OPTIONS");
+  next();
+})
 app.set("view engine", "ejs");
+
+
+//***************************************************************************//
+//*************************DB SETUP  ***************************************//
+//***************************************************************************//
+const mongoose = require('mongoose');
+mongoose.pluralize(null);
+let dbData;
+const Schema = mongoose.Schema;
+//***************************************************************************//
 
 var port = process.env.OPENSHIFT_NODEJS_PORT || process.env.PORT || 8080;
 var ip = process.env.OPENSHIFT_NODEJS_IP || process.env.IP || '0.0.0.0';
 
 app.listen(port, ip,  () => {
-  console.log("The server started on port 3000 !!!!!!");
+  console.log("The server started on port :" + port);
  
   
  
@@ -48,6 +64,23 @@ app.post("/sendmail", (req, res) => {
     console.log(`The message has beed send 😃 and the id is ${info.messageId}`);
     res.send(info);
   });
+});
+
+app.use("/testDataLoad", (req, res) => {
+  console.log("request came");
+  let user = new dataSchema({
+    name : 'FROM Node',
+    character : 'char from Node'
+  });
+  console.log(user);
+  user.save().then(res=>{
+    console.log(res);
+  }).catch(err=>{
+    console.log(err);
+  })
+  
+  console.log(user);
+  
 });
 
 
@@ -328,13 +361,168 @@ async function sendMail(user, callback) {
   callback(info);
 }
 
+// *************************************************** // 
+// *************************************************** // 
+// *****************MONGO DB CONNECT API************** // 
+// *************************************************** // 
+// *************************************************** // 
+
+app.use("/savedata", (req, res) => {
+  console.log("request came");
+  console.log(req.headers);
+//console.log(req.body);
+mongoose.disconnect();
+setSchemaNDB(req.headers.database,req.headers.table)
+  let user = new dbData(req.body);
+ // console.log(user);
+  user.save().then(response=>{
+    console.log(res);
+    mongoose.disconnect().then(()=>{res.send(JSON.stringify(response));}).catch((err)=>console.log(err)) 
+
+  }).catch(err=>{
+    console.log(err);
+    res.send(JSON.stringify(err));
+    mongoose.disconnect() 
+  })
+ 
+});
+
+
+app.post("/updatedata", (req, res) => {
+  console.log("request came for update");
+  //console.log(req.headers);
+console.log(req.body);
+mongoose.disconnect();
+setSchemaNDB(req.headers.database,req.headers.table)
+  let user = new dbData(req.body);
+ // console.log(user);
+ dbData.update({ _id: req.body.id }, req.body).then(response=>{
+    console.log(response);
+    mongoose.disconnect().then(()=>res.send(JSON.stringify(response))).catch((err)=>console.log(err)) 
+    
+  }).catch(err=>{
+    console.log(err);
+    mongoose.disconnect().then(()=> res.send(JSON.stringify(response)).catch(
+      (err)=>console.log(err)
+    )) 
+  })
+ 
+});
+
+app.post("/deletedata", (req, res) => {
+  console.log("request came for update");
+  //console.log(req.headers);
+console.log(req.body);
+mongoose.disconnect();
+setSchemaNDB(req.headers.database,req.headers.table)
+  let user = new dbData(req.body);
+ // console.log(user);
+ dbData.remove({ _id: req.body.id }).then(response=>{
+    console.log(res);
+   mongoose.disconnect().then(()=> res.send(JSON.stringify(response)).catch(
+     (err)=>console.log(err)
+   )) 
+    
+  }).catch(err=>{
+    console.log(err);
+    mongoose.disconnect().then(()=> res.send(JSON.stringify(response)).catch(
+      (err)=>console.log(err)
+    )) 
+    mongoose.disconnect();
+  })
+ 
+});
+
+app.use("/getalldata", (req, res) => {
+  console.log("request came");
+  console.log(req.query.fliterBy);
+  setSchemaNDB(req.query.database,req.query.table)
+  dbData.find({}).then(response=>{
+   // console.log(response);
+      mongoose.disconnect()
+    res.send(response);
+  }).catch(err=>{
+    console.log(err);
+    mongoose.disconnect();
+  })
+ 
+});
+
+app.use("/getfliterdata", (req, res) => {
+  console.log("request came in fliter");
+  console.log(JSON.parse(req.query.fliterBy));
+  setSchemaNDB(req.query.database,req.query.table)
+  dbData.find().or(JSON.parse(req.query.fliterBy)).then(response=>{
+    console.log(response);
+      mongoose.disconnect(); 
+    res.send(JSON.stringify(response));
+  }).catch(err=>{
+    console.log(err);
+    mongoose.disconnect();
+  })
+});
+
+app.use("/getlimitedfliterdata", (req, res) => {
+  console.log("request came in fliter");
+  console.log(JSON.parse(req.query.fliterBy));
+  setSchemaNDB(req.query.database,req.query.table)
+  dbData.find().or(JSON.parse(req.query.fliterBy)).sort({ _id: -1 }).limit(10).then(response=>{
+    console.log(response);
+      mongoose.disconnect(); 
+    res.send(JSON.stringify(response));
+  }).catch(err=>{
+    console.log(err);
+    mongoose.disconnect();
+  })
+});
+
+
+
+
+// *************************************************** // 
+// ********MONGO DB CONNECT FUNCTIONS **************** // 
+// *************************************************** // 
+
+function setSchemaNDB(database,table){
+
+  connectDB(database)
+  var dataSchema = new Schema({}, { strict: false });
+  dataSchema.set('timestamps', true);
+ 
+  try {
+    dbData = mongoose.model(table);
+  } catch (error) {
+    dbData = mongoose.model(table, dataSchema);
+  }
+}
+function connectDB(database){
+  const MONGO_USERNAME = 'kuldeep';
+const MONGO_PASSWORD = '2007Yatish1993';
+const MONGO_HOSTNAME = '143.110.187.159';
+const MONGO_PORT = '27017';
+const MONGO_DB = database;
+
+const url = `mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOSTNAME}:${MONGO_PORT}/${MONGO_DB}?authSource=admin`;
+
+mongoose.connect(url, {useNewUrlParser: true,poolSize: 10},).then(()=>{
+    console.log('Connect to database!');
+}).catch(e => {
+    //handleError(e)
+    console.log(e);
+console.log(' DB Connection Failed');
+
+});
+}
+
+
+
 ///////Payment PArt////////////
 // const instance = new razorpay({
 //   key_id:"rzp_test_r4Rm8PklSkkC6P",
 //   key_secret:"cfFPZV5yniu26NuBWS0L9j7U"
 //  });
  
-//  app.get("/order", (req, res) => {
+//  app.tt("/order", (req, res) => {
 //    res.render("pages/order");
 //  });
 //  app.post("/order", (req, res) => {
@@ -409,3 +597,6 @@ async function sendMail(user, callback) {
 
 
 // main().catch(console.error);
+
+
+
